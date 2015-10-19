@@ -5,13 +5,14 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Data.Common;
 using System.Data;
+using easysql.dialect;
 
 namespace easysql
 {
     /// <summary>
     /// 数据库连接类基类
     /// 数据库操作类基类
-    /// 线程不安全
+    /// 在使用事务时线程不安全
     /// 每次只能使用一个事务
     /// </summary>
     public abstract class BaseDatabase : IDisposable
@@ -20,7 +21,17 @@ namespace easysql
         private DbTransaction _dbTranscation;//事务对象
         protected string _paramNamePrefix;
         protected string _paramPrefix;
-        protected int _executeTimeout = 60;//执行超时时间
+        protected int _executeTimeout = 20;//执行超时时间
+
+        private Dialect _dialect;
+
+        public BaseDatabase(Dialect dialect,String paramNamePrefix,String paramPrefix)
+        {
+            this._dialect = dialect;
+            this._paramNamePrefix = paramNamePrefix;
+            this._paramPrefix = paramPrefix;
+        }
+
         //获取连接的方法(获取并打开)
         protected abstract DbConnection GetConnection();
         //关闭释放连接的方法
@@ -78,14 +89,67 @@ namespace easysql
                 RetreatCmd(sql, cmd, paramValues);
                 using (DbDataAdapter adp = CreateAdapter(cmd))
                 {
-                    DataTable dt = new DataTable();
+                    DataTable dt = new DataTable("query");
                     adp.Fill(dt);
                     return dt;
                 }
             }
         }
 
+
         #endregion 数据库基本方法
+
+
+        #region 数据库扩展方法
+        public virtual DataTable QueryDataTable(int start,int maxResult,String sql,params Object[] paramValues)
+        {
+            int i = 0;
+            var paramList = new List<Object>();
+            sql = this._dialect.getLimitString(sql, start, maxResult, ref i,paramList);
+            return QueryDataTable(sql,paramList.ToArray());
+        }
+        /// <summary>
+        /// 查询并将结果转换为实体集合
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="sql"></param>
+        /// <param name="paramValues"></param>
+        /// <returns></returns>
+        public virtual List<T> Query<T>(String sql,params Object[] paramValues) where T :new()
+        {
+            var dt = this.QueryDataTable(sql, paramValues);
+            return _dialect.TableToList<T>(dt);
+        }
+
+        public virtual List<T> Query<T>(int start,int maxResult,String sql,params Object[] paramValues) where T : new()
+        {
+            var dt = this.QueryDataTable(start, maxResult, sql, paramValues);
+            return _dialect.TableToList<T>(dt);
+        }
+
+        public virtual List<T> Query<T>(String tbname,T bean,params Restrain[] restrains) where T :new()
+        {
+
+            StringBuilder sqlWhere = new StringBuilder();
+            List<Object> paramValueList = new List<Object>();
+            int i = 0;
+            _dialect.TransWhere<T>(bean, sqlWhere, paramValueList, ref i, restrains);
+
+            String sql = "select * from " + tbname + " where 1=1 " + sqlWhere;
+            sql = _dialect.getOrderString(sql, paramValueList, restrains.ToArray());
+
+            sql = _dialect.getLimitString(sql, ref i, paramValueList, restrains);
+
+            return Query<T>(sql, paramValueList.ToArray());
+        }
+
+
+
+
+
+
+        #endregion 数据库扩展方法
+
 
 
         #region 辅助方法
@@ -98,6 +162,7 @@ namespace easysql
         /// <param name="paramValues"></param>
         protected void RetreatCmd(String sql, DbCommand cmd, object[] paramValues)
         {
+            Console.WriteLine("执行:"+sql);
             cmd.CommandTimeout = _executeTimeout;
             //如果无参数则直接返回
             if (paramValues == null || paramValues.Length == 0)
@@ -183,9 +248,6 @@ namespace easysql
                 _dbTranscation = null;
             }
         }
-
-
-
 
         #endregion 事务
 
