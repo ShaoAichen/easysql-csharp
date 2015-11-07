@@ -20,6 +20,11 @@ namespace easysql
             this._connString = connString;
         }
 
+        protected override string AutoIncreSql()
+        {
+            return " select @@identity ";
+        }
+
         protected override DbDataAdapter CreateAdapter(DbCommand cmd)
         {
             return new SqlDataAdapter(cmd as SqlCommand);
