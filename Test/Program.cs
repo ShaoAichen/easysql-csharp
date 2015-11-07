@@ -61,8 +61,10 @@ namespace Test
             BaseDBHelper dh = DHF.CreateSqlServerDBHelper(connString);
 
             //var list = dh.CreateDatabase().Query<UserModel>("select top 10 * from [user]");
-      //      var list = dh.CreateDatabase().Query<UserModel>("tb_user", null, Restrain.Order("id"),Restrain.MaxResult(20));
-            var dt  = dh.CreateDatabase().QueryDataTable(10, 20, "select distinct * from tb_user");
+            //      var list = dh.CreateDatabase().Query<UserModel>("tb_user", null, Restrain.Order("id"),Restrain.MaxResult(20));
+            //  var dt  = dh.CreateDatabase().QueryDataTable(10, 20, "select distinct * from tb_user");
+
+            var dt = dh.QueryDataTable(10, 200, "select * from tb_user where id>{0}", 20);
 
             Console.ReadKey();
 
